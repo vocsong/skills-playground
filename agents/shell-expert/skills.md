@@ -1,40 +1,60 @@
-# shell-expert
+---
+name: shell-expert
+description: Delegates all shell/terminal command execution to the shell-expert sub-agent backed by a stronger model. Use when any shell command, CLI tool, or terminal task is needed — from simple ls/pwd to complex multi-step pipelines.
+---
 
-Delegates all shell/terminal command execution to the `shell-expert` OpenCode sub-agent, backed by a stronger model. The primary model never uses the bash tool directly.
+## What I Do
 
-## Who / When
+I intercept all shell/terminal command requests and delegate them to the `shell-expert` OpenCode sub-agent. The primary model never uses the bash tool directly — every terminal task goes through the stronger model-backed sub-agent.
 
-- Anyone using OpenCode with a fast/lightweight primary model who wants shell work handled by a stronger model
-- Triggered by **any** shell, terminal, or command execution request, including:
-  - Tool/CLI names: `npm`, `pip`, `git`, `docker`, `curl`, `wget`, `make`, `cargo`, `go`, `kubectl`, `helm`, `brew`, `apt`, `yarn`, `pnpm`, `poetry`, `mysql`, `psql`, `ssh`, `scp`, `rsync`, `systemctl`, `journalctl`
-  - Action words: `run`, `execute`, `install`, `build`, `test`, `deploy`, `shell`, `bash`, `terminal`, `command`, `cmd`, `cli`, `script`
-  - Phrases: `run npm install`, `execute this command`, `check with curl`, `build the project`, `list files with ls`, `show git status`, `what does pwd show`
+## When to Use Me
+
+Load this skill when the user asks for **any** shell, terminal, or command execution task. This includes:
+
+- CLI tool invocations: `npm`, `pip`, `git`, `docker`, `curl`, `wget`, `make`, `cargo`, `go`, `kubectl`, `helm`, `brew`, `apt`, `yarn`, `pnpm`, `poetry`
+- Action words: `run`, `execute`, `install`, `build`, `test`, `deploy`, `shell`, `bash`, `terminal`, `command`, `cmd`, `cli`, `script`
+- Simple commands: `ls`, `pwd`, `git status`, `echo`, `cat`, `date`
+- Complex workflows: multi-step pipelines, chained commands with `&&`, error recovery loops
 
 ## Workflow
 
-### Phase 1: Check agent configuration
+### Step 1: Verify Configuration
 
-1. Verify `opencode.json` contains the `shell-expert` agent definition.
-2. If missing, tell the user to add the shell-expert config (provide the JSON snippet).
+Check that `opencode.json` has the `shell-expert` agent defined. If missing, instruct the user to add:
 
-### Phase 2: Delegate to shell-expert
+```json
+{
+  "agent": {
+    "shell-expert": {
+      "model": "openai/gpt-5.5",
+      "description": "Handles all shell command generation and execution. Primary model must delegate all terminal tasks to this sub-agent.",
+      "mode": "subagent",
+      "temperature": 0.2,
+      "steps": 20,
+      "permission": {
+        "bash": "allow"
+      }
+    }
+  }
+}
+```
 
-**Critical: Never use the bash tool directly. Always delegate to the shell-expert sub-agent.**
+### Step 2: Delegate EVERY Shell Task
+
+**Critical rule: Never use the bash tool directly. Always delegate.**
 
 ```
 Task(description="<what needs to happen>", prompt="<full instructions>", subagent_type="shell-expert")
 ```
 
-This applies to every shell invocation — single commands, multi-step pipelines, read-only queries, and mutating operations.
+This applies to every shell invocation — simple or complex, read-only or mutating.
 
-### Phase 3: Use the result
+### Step 3: Integrate the Result
 
-1. Read the shell expert's structured summary.
-2. Integrate the result into the main task.
-3. If the task failed, follow the shell expert's recommendation for next steps.
+Read the shell expert's structured summary and integrate findings into the main task.
 
-## Important Rules
+## Hard Rules
 
-- **Never generate shell commands directly.** If you're about to use the bash tool or write a shell command, stop and delegate to `shell-expert` instead.
-- **All shell tasks qualify.** Simple commands like `ls`, `pwd`, `git status` and complex pipelines like `npm install && npm test` all go through shell-expert.
-- File reading, file searching, and code editing should use their dedicated tools — only terminal/shell operations go through shell-expert.
+- **Never generate shell commands directly.** If about to use bash, stop and delegate.
+- **All shell tasks qualify.** `ls`, `pwd`, `git status`, `npm install`, `docker build` — everything goes through shell-expert.
+- **File read/search/edit tools are exempt.** Only terminal/shell operations go through shell-expert.

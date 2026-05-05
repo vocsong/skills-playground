@@ -23,7 +23,7 @@ Skills, agents, and plugins are invented here and then, when stable, published t
 |-------|-------------|
 | [repo-review](skills/repo-review/skills.md) | Read-only repository housekeeping audit across git hygiene, dead code, config, docs, and dependencies |
 | [owasp-security](skills/owasp-security/skills.md) | Pattern-based OWASP security scan across Web, API, LLM/Agentic, and Mobile domains |
-| [shell-expert](agents/shell-expert/skills.md) | Auto-delegates all shell/terminal commands to the shell-expert sub-agent backed by a stronger model |
+| [shell-expert](agents/shell-expert/skills.md) | Auto-loads on shell/terminal prompts and delegates all commands to the shell-expert sub-agent backed by a stronger model |
 
 ## Agents
 

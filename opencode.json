@@ -5,7 +5,10 @@
       "description": "Handles all shell command generation and execution. Primary model must delegate all terminal tasks to this sub-agent.",
       "mode": "subagent",
       "temperature": 0.2,
-      "steps": 20
+      "steps": 20,
+      "permission": {
+        "bash": "allow"
+      }
     }
   }
 }
