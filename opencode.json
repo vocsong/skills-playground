@@ -1,8 +1,8 @@
 {
   "agent": {
-    "shell-worker": {
+    "shell-expert": {
       "model": "openai/gpt-5.5",
-      "description": "Generates and executes complex shell commands. Use for multi-step terminal tasks, refactors, installs, chained commands.",
+      "description": "Handles all shell command generation and execution. Primary model must delegate all terminal tasks to this sub-agent.",
       "mode": "subagent",
       "temperature": 0.2,
       "steps": 20

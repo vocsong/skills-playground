@@ -28,7 +28,7 @@ Skills, agents, and plugins are invented here and then, when stable, published t
 
 | Agent | Description |
 |-------|-------------|
-| [shell-worker](agents/shell-worker/agents.md) | Delegates complex shell command generation and execution to a stronger OpenCode sub-agent model |
+| [shell-expert](agents/shell-expert/agents.md) | Delegates all shell command generation and execution to a stronger OpenCode sub-agent model |
 
 ## Plugins
 

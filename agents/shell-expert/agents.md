@@ -1,27 +1,33 @@
-# Shell Worker Agent
+# Shell Expert Agent
 
 ## Purpose
 
-`shell-worker` is an OpenCode sub-agent for complex shell command generation and execution. It is intended for primary models that should avoid hand-writing risky, multi-step, or highly specific terminal commands directly.
+`shell-expert` is an OpenCode sub-agent that handles **all** shell command generation and execution. The primary model should **never** use the bash tool directly — every shell task is delegated to this agent, backed by a stronger model such as `openai/gpt-5.5`.
 
-The agent delegates those tasks to a stronger model-backed child session, such as `openai/gpt-5.5`, while keeping ordinary shell calls available to the primary model.
+This ensures that even simple commands benefit from safe execution patterns, OS detection, error recovery, and structured output.
 
 ## Problem It Solves
 
-Primary coding agents often need to run terminal workflows that are more complex than a single obvious command. Examples include dependency installs, chained setup commands, multi-step refactors, generated scripts, and failure recovery after a command exits non-zero.
+Primary coding agents often generate shell commands that fail silently, miss edge cases, or run destructive operations without guards. By routing **every** shell invocation through `shell-expert`, the primary model gets:
 
-Instead of overriding the `bash` tool, this pattern delegates at the agent level:
+1. Pre-flight safety checks on every command.
+2. OS-aware command generation.
+3. Automatic error classification and recovery (up to 2 retries).
+4. Structured summaries with status, changes, and recommendations.
+5. Consistent security boundaries (no accidental `rm -rf`, `sudo`, or secret exposure).
 
-1. The primary model identifies that a shell task is complex.
-2. The primary model calls OpenCode's `Task` tool with `subagent_type: "shell-worker"`.
-3. OpenCode starts a child session using the `shell-worker` agent configuration.
-4. The child agent generates, runs, debugs, and summarizes the terminal work.
+Delegation happens at the agent level:
+
+1. The primary model identifies a need for any shell command.
+2. The primary model calls OpenCode's `Task` tool with `subagent_type: "shell-expert"`.
+3. OpenCode starts a child session using the `shell-expert` agent configuration.
+4. The shell-expert agent generates, runs, debugs, and summarizes the terminal work.
 
 ## Intended Users
 
-This agent is for OpenCode users who run a fast or cheaper primary model but want complex shell work handled by a stronger model.
+This agent is for OpenCode users who want **all** shell work (simple and complex) routed through a stronger model for consistent safety, correctness, and error recovery.
 
-It is especially useful when the primary model is configured as something lightweight, while the shell worker is configured with a stronger model such as `openai/gpt-5.5`.
+It is especially useful when the primary model is configured as a lightweight/fast model, while the shell expert is configured with a stronger model such as `openai/gpt-5.5`.
 
 ## Inputs
 
@@ -32,19 +38,35 @@ The primary model should provide:
 - Relevant constraints, such as whether installs are allowed, whether destructive operations are forbidden, or which directory to use.
 - Any expected success condition, such as passing tests or producing a specific artifact.
 
-Example `Task` call:
+Example `Task` calls:
 
 ```json
 {
   "description": "Install dependencies",
   "prompt": "Run npm install in the current project and resolve any peer dependency conflicts without using force unless necessary. Summarize what changed.",
-  "subagent_type": "shell-worker"
+  "subagent_type": "shell-expert"
+}
+```
+
+```json
+{
+  "description": "List project files",
+  "prompt": "List all TypeScript files in the src/ directory recursively.",
+  "subagent_type": "shell-expert"
+}
+```
+
+```json
+{
+  "description": "Check git status",
+  "prompt": "Show the current git status including branch and untracked files. Summarize in 1-2 sentences.",
+  "subagent_type": "shell-expert"
 }
 ```
 
 ## Outputs
 
-The shell worker should return:
+The shell expert should return:
 
 - Commands executed.
 - Important command results.
@@ -61,9 +83,9 @@ Add this to `opencode.json` in the project where you want to use the agent:
 ```json
 {
   "agent": {
-    "shell-worker": {
+    "shell-expert": {
       "model": "openai/gpt-5.5",
-      "description": "Generates and executes complex shell commands. Use for multi-step terminal tasks, refactors, installs, chained commands.",
+      "description": "Handles all shell command generation and execution. Primary model must delegate all terminal tasks to this sub-agent.",
       "mode": "subagent",
       "temperature": 0.2,
       "steps": 20
@@ -76,53 +98,49 @@ Adjust `model` to match the provider and model configured in your OpenCode envir
 
 ## Delegation Instructions
 
-Add guidance like this to the project's `AGENTS.md`:
+Add this to the project's `AGENTS.md`. This instructs the primary model to **always** use `shell-expert` for shell commands:
 
 ```markdown
 ## Shell Command Delegation
 
-For complex shell tasks, delegate to the `shell-worker` sub-agent instead of generating the command directly.
+**ALL shell commands must be delegated to the `shell-expert` sub-agent.** Never use the bash tool directly.
 
-Use this for multi-step operations, chained commands with `&&`, installs, refactors, long commands, failure recovery, and terminal workflows where command correctness matters.
+`Task(description="<what needs to happen>", prompt="<full instructions>", subagent_type="shell-expert")`
 
-Invoke it with:
-
-`Task(description="<what needs to happen>", prompt="<full instructions>", subagent_type="shell-worker")`
-
-Do not delegate simple commands such as `pwd`, `date`, `ls`, `git status`, or a single obvious test command.
+This applies to every shell invocation — simple or complex, read-only or mutating, single command or multi-step pipeline.
 ```
 
 ## Workflow
 
-1. Determine whether the shell task is complex enough to delegate.
-2. If simple, use the normal shell tool directly.
-3. If complex, call `Task` with `subagent_type: "shell-worker"`.
-4. Provide complete instructions, including constraints and success criteria.
-5. Let the shell worker run commands and handle recoverable failures.
-6. Use the shell worker's summary to continue the main task.
+1. Identify any need for a shell command (any complexity).
+2. Call `Task` with `subagent_type: "shell-expert"`, providing complete instructions, constraints, and success criteria.
+3. The shell expert runs the command(s) with safety checks, OS detection, and error recovery.
+4. Use the shell expert's summary to continue the main task.
 
-## Good Delegation Examples
+## Delegation Examples
 
-- Install dependencies and resolve peer dependency conflicts.
-- Run a multi-step migration command sequence.
-- Generate a one-off shell script and execute it.
-- Run a test command, inspect failures, install missing tools, and retry.
-- Perform terminal-driven refactors that require several commands.
-- Diagnose environment setup problems involving package managers, shells, or CLIs.
+Every shell command should go through shell-expert:
 
-## Poor Delegation Examples
-
-- `date`
-- `pwd`
+- `ls src/ --recursive`
+- `npm install`
 - `git status`
-- `npm test` when no failure handling or extra logic is needed.
-- Reading a specific file, which should use the normal file-reading tools.
+- `pip list`
+- `docker ps`
+- `make build`
+- `curl -s https://api.example.com/health`
+- `pwd`
+- `npm test && npm run lint`
+- Multi-step migration sequences
+- Dependency installs with conflict resolution
+- Build/debug cycles with failure recovery
+- Container orchestration commands
+- Chained data pipelines with `|`, `&&`, `xargs`
 
 ---
 
-# Shell Worker System Instructions
+# Shell Expert System Instructions
 
-The sections below serve as runtime guidance for the shell-worker model. When the sub-agent spawns, it should follow these category-specific strategies.
+The sections below serve as runtime guidance for the shell-expert model. When the sub-agent spawns, it should follow these category-specific strategies.
 
 ---
 
@@ -160,7 +178,7 @@ The sections below serve as runtime guidance for the shell-worker model. When th
 ### Summary format
 After completing (or failing) a task, return:
 ```
-## Shell Worker Summary
+## Shell Expert Summary
 
 **Task:** <one-line description>
 **Status:** SUCCESS | PARTIAL | FAILED
@@ -196,10 +214,6 @@ Covers: create, read, copy, move, delete, rename, chmod, chown, symlink, directo
 - Permission denied → check ownership with `ls -la`.
 - Directory not empty during `rmdir` → use `rm -r` with caution or `find -delete`.
 
-**When NOT to delegate:**
-- Reading a single known file path (use normal read tools).
-- Listing a directory (use `ls` directly).
-
 ### 2. Text Processing & Data Manipulation
 
 Covers: grep, sed, awk, cut, sort, uniq, jq, yq, CSV processing, JSON manipulation, regex extraction, log parsing.
@@ -219,10 +233,6 @@ Covers: grep, sed, awk, cut, sort, uniq, jq, yq, CSV processing, JSON manipulati
 - Invalid regex → test with `grep --color=auto` first.
 - Binary file warnings from grep → add `-I` or `--text`.
 - Encoding issues → detect with `file -I`, convert with `iconv` if needed.
-
-**When NOT to delegate:**
-- Simple file reads (use read tools).
-- Searching code with `grep` or `rg` in the context of code understanding (use the dedicated grep/glob tools).
 
 ### 3. Package Management
 
@@ -255,10 +265,6 @@ Covers: npm, yarn, pnpm, pip, pipenv, poetry, apt, brew, cargo, go modules, gem,
 - Lockfile merge conflicts → regenerate lockfile from manifest.
 - Disk space exhaustion during install → report and stop.
 
-**When NOT to delegate:**
-- Simple `npm test` or `pip list` (informational commands).
-- Checking a package version (one command).
-
 ### 4. Git Workflows
 
 Covers: clone, init, add, commit, branch, checkout, merge, rebase, push, pull, fetch, stash, log, diff, status, tag, remote management.
@@ -282,10 +288,6 @@ Covers: clone, init, add, commit, branch, checkout, merge, rebase, push, pull, f
 - Uncommitted changes blocking pull → stash, pull, then pop.
 - Authentication failures → report, do not expose credentials.
 
-**When NOT to delegate:**
-- Simple `git status` or `git log` (informational).
-- `git diff` for code review (use separate tools).
-
 ### 5. System Diagnostics & Administration
 
 Covers: process management (ps, top, htop, kill), disk usage (df, du), memory (free, vmstat), network (netstat, ss, ping), system info (uname, lscpu, lsblk), permissions, users, services (systemctl, service).
@@ -305,16 +307,13 @@ Covers: process management (ps, top, htop, kill), disk usage (df, du), memory (f
 - Command not found → the tool varies by OS. Detect OS and use the appropriate alternative.
 - Permission denied → likely needs `sudo`. Report, don't assume.
 
-**When NOT to delegate:**
-- Simple system info queries (`uname`, `whoami`, `date`).
-
 ### 6. Environment & Shell Configuration
 
 Covers: PATH manipulation, environment variables, shell aliases, rc file editing (.bashrc, .zshrc), toolchain setup, virtual environments, Node version management, Python venvs.
 
 **Pre-flight:**
 - Detect the current shell (`echo $SHELL`).
-- Check current PATH (`echo $PATH` | tr ':' '\n'`).
+- Check current PATH (`echo $PATH | tr ':' '\n'`).
 - Identify the relevant rc file: `.bashrc`, `.zshrc`, `.bash_profile`, `.profile`.
 
 **Safe patterns:**
@@ -328,9 +327,6 @@ Covers: PATH manipulation, environment variables, shell aliases, rc file editing
 - Incorrect shell → use the right rc file for the detected shell.
 - PATH changes not taking effect → remind that a new shell session is needed, or source the rc file.
 - Conflicting Node/Python versions → list available versions and ask user to choose.
-
-**When NOT to delegate:**
-- Checking a single env var (`echo $HOME`).
 
 ### 7. Build & Compilation
 
@@ -352,9 +348,6 @@ Covers: make, cmake, gcc, g++, rustc, go build, tsc, webpack, esbuild, gradle, m
 - Compiler errors → extract the first error only for the summary (full logs clutter). Report the file and line.
 - Linker errors → check if shared libraries exist (`ldconfig -p | grep <lib>`).
 
-**When NOT to delegate:**
-- Running a single known build command like `make` without any expected configuration or recovery.
-
 ### 8. Container Operations
 
 Covers: docker, podman, docker-compose, image building, container running, registry operations.
@@ -374,9 +367,6 @@ Covers: docker, podman, docker-compose, image building, container running, regis
 - Port conflicts → check `docker ps` / `ss -tlnp` for conflicting ports.
 - Image pull failures → retry once. Check network connectivity.
 - Build context too large → suggest `.dockerignore`.
-
-**When NOT to delegate:**
-- Simple `docker ps` or `docker images` (informational, one command).
 
 ### 9. Network Operations
 
@@ -398,9 +388,6 @@ Covers: curl, wget, API calls, file downloads, port scanning, DNS lookups, SSL c
 - SSL errors → could be expired cert, self-signed cert, or system clock skew. Report details.
 - Connection refused → the service is down or the port is wrong. Try `nc -zv host port`.
 
-**When NOT to delegate:**
-- A single `curl` request to a known URL with no failure handling needed.
-
 ### 10. Data Transformation Pipelines
 
 Covers: piped commands (|), xargs, parallel, tee, redirects, multi-stage data processing, ETL-style shell pipelines.
@@ -419,9 +406,6 @@ Covers: piped commands (|), xargs, parallel, tee, redirects, multi-stage data pr
 **Common failures:**
 - Argument list too long → switch from `*` glob to `find ... -exec` or `xargs`.
 - Pipeline stage failing silently → use `set -o pipefail` in scripts.
-
-**When NOT to delegate:**
-- A single pipe with two commands and no error handling needed.
 
 ---
 
@@ -446,47 +430,44 @@ Covers: piped commands (|), xargs, parallel, tee, redirects, multi-stage data pr
 - Commands involving secrets, credentials, `.env` files, or tokens must be handled cautiously and not exposed in summaries.
 - Long-running commands should use reasonable timeouts and report if they cannot complete.
 - Package installs may change lockfiles and should be summarized.
-- If the requested command is ambiguous, the shell worker should ask for clarification or choose the safest minimal path.
-- The agent should not replace normal file search, file read, or targeted edit tools.
+- If the requested command is ambiguous, the shell expert should ask for clarification or choose the safest minimal path.
+- The shell expert handles shell/terminal tasks. File search, file read, and code editing should use their dedicated tools — but if those tools are unavailable, shell-based alternatives (e.g., `ls`, `find`, `cat`, `grep`) are routed through shell-expert.
 - If a command requires user interaction (passwords, confirmations), stop and report — do not guess or disable interactive prompts.
 - If the user's intent is unclear, ask or assume the safest interpretation (read-only over mutation, local over remote, project-scoped over system-scoped).
 
 ## Bash Tool Override
 
-No custom `bash` override is required for this pattern. Delegation happens through OpenCode's model and agent layer, not by intercepting shell execution.
+The primary model should never use the bash tool directly. All shell execution is delegated to `shell-expert` via the `Task` tool.
 
-If a project already has `.opencode/tools/bash.ts`, it can usually be removed or kept as a pass-through. Only route all bash calls through this agent if the project intentionally wants every shell invocation handled by the stronger model.
+If a project has `.opencode/tools/bash.ts`, it can be configured to route all bash calls through shell-expert, or removed entirely since delegation happens at the model layer rather than through tool interception.
 
 ## System Prompt
 
-When configuring the shell-worker agent in OpenCode, append these core rules as the agent's system prompt so the model follows them at runtime:
+When configuring the shell-expert agent in OpenCode, append these core rules as the agent's system prompt so the model follows them at runtime:
 
 ```
-You are a shell command execution specialist. Your job is to safely generate and execute terminal commands for complex multi-step tasks. Follow these rules:
+You are a shell command execution specialist. You handle ALL shell commands on behalf of the primary model, from simple informational queries to complex multi-step workflows. Follow these rules:
 
 1. PRE-FLIGHT: Before any command, verify the working directory, available tools, OS type, and whether the task mutates state.
 2. SAFETY: Prefer idempotent commands. Never run destructive operations (rm -rf, force push to main, sudo without permission) unless explicitly requested.
 3. ERROR RECOVERY: If a command fails, classify the error (missing tool, permission, syntax, network, dependency) and apply the appropriate recovery. Retry up to 2 times with different approaches.
 4. SECRETS: Never expose credentials, tokens, API keys, or .env contents in output.
 5. SUMMARY: Always return a structured summary with task description, status, commands executed, changes made, errors, and recommendations.
-6. BOUNDARIES: Do not replace file search, file read, or code editing tools. Only handle terminal/shell tasks.
+6. SCOPE: Handle every shell task — simple or complex, read-only or mutating. If the task could be done with a non-shell tool (file read, code search, etc.), use the shell version only when those dedicated tools are unavailable.
 7. IDEMPOTENCY: Prefer commands that are safe to re-run. Add existence checks before creating, overwriting, or deleting.
 ```
 
 ## Quick Reference Card
 
 ```
-DELEGATE TO SHELL-WORKER:
-  Installs with conflict resolution    |  Multi-step migrations
-  Chained commands (3+ pipes/&&)       |  System diagnostics
-  Failure recovery loops               |  Build/debug cycles
-  Generated/one-off scripts            |  Container orchestration
-  Package manager operations           |  Data pipeline construction
-  Git workflows (merge/rebase/push)    |  Environment config
-  Network operations with retry        |  Text/data transformation
+ALWAYS DELEGATE TO SHELL-EXPERT:
 
-DO NOT DELEGATE:
-  pwd, date, ls, cat single file       |  Simple informational commands
-  git status, git log, git diff        |  Opening/reading specific files
-  echo $VAR                            |  Single obvious commands
+  ls, pwd, cat, echo, date               |  Installs (npm, pip, cargo, apt)
+  git status, git log, git diff          |  Git workflows (merge, rebase, push)
+  docker ps, docker images               |  Container orchestration
+  curl, wget, ping, nslookup             |  Network operations with retry
+  find, grep, head, tail                 |  Text processing (sed, awk, jq)
+  npm test, pip list, cargo check        |  Build/debug cycles (make, cmake)
+  Single commands                        |  Chained pipelines (|, &&, xargs)
+  Read-only queries                      |  Mutating operations (installs, writes)
 ```
