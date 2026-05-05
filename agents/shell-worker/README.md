@@ -1,8 +1,23 @@
 # Shell Worker Agent
 
-OpenCode sub-agent for delegating complex shell command generation and execution to a stronger model.
+OpenCode sub-agent that delegates complex shell command generation and execution to a stronger model, with comprehensive coverage across 10 terminal task categories.
 
-See [`agents.md`](agents.md) for the full workflow, configuration, and delegation guidance.
+See [`agents.md`](agents.md) for the full workflow, category-by-category guidance, security boundaries, and system prompt.
+
+## Terminal Task Categories Covered
+
+| Category | Examples |
+|----------|----------|
+| File Operations | cp, mv, rm, mkdir, chmod, symlinks |
+| Text Processing | grep, sed, awk, jq, CSV, JSON |
+| Package Management | npm, pip, apt, cargo, go mod |
+| Git Workflows | merge, rebase, push, conflict resolution |
+| System Diagnostics | ps, df, free, netstat, systemctl |
+| Environment Setup | PATH, venvs, nvm, shell rc files |
+| Build & Compilation | make, cmake, gcc, tsc, cargo |
+| Container Operations | docker, podman, compose |
+| Network Operations | curl, wget, APIs, DNS, SSL |
+| Data Pipelines | pipes, xargs, parallel, tee |
 
 ## Quick Install
 
